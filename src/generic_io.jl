@@ -295,14 +295,16 @@ function LegendDataTypes.readdata(
 end
 
 
-function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
-    x::AbstractArray{T,N},
-    fulldatatype::DataType = typeof(x)
-) where {T<:Number,N}
-    output[name] = ustrip(x)
-    nothing
-end
+# # Obsolete?
+# function LegendDataTypes.writedata(
+#     output::HDF5.DataFile, name::AbstractString,
+#     x::AbstractArray{T,N},
+#     fulldatatype::DataType = typeof(x)
+# ) where {T<:Number,N}
+#     output[name] = ustrip(x)
+#     nothing
+# end
+
 
 function LegendDataTypes.readdata(
     input::HDF5.DataFile, name::AbstractString,
