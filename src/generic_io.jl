@@ -38,6 +38,12 @@ function datatype_from_string(s::AbstractString, dset_size::NTuple{L_dset,Intege
     if s == "real"
         #!!! N_dset == 0 || throw(ErrorException("Array element specified as scalar, but $N_dset unused trailing dimensions in dataset"))
         RealQuantity
+    elseif s == "string"
+        # dset_size == () || ...
+        String
+    elseif s == "symbol"
+        # dset_size == () || ...
+        Symbol
     else
         m = match(datatype_regexp, s)
         m isa Nothing && throw(ErrorException("Invalid datatype string \"$s\""))
@@ -90,6 +96,10 @@ end
 
 
 datatype_to_string(::Type{<:RealQuantity}) = "real"
+
+datatype_to_string(::Type{<:AbstractString}) = "string"
+
+datatype_to_string(::Type{<:Symbol}) = "symbol"
 
 datatype_to_string(::Type{<:AbstractArray{T,N}}) where {T,N} =
     "array<$N>$(_inner_datatype_to_string(T))"
@@ -247,6 +257,42 @@ function LegendDataTypes.readdata(
     nestedview(data, SVector{N})
 end
 
+
+function LegendDataTypes.writedata(
+    output::HDF5.DataFile, name::AbstractString,
+    x::AbstractString,
+    fulldatatype::DataType = typeof(x)
+)
+    output[name] = x
+    if fulldatatype != Nothing
+        setdatatype!(output[name], fulldatatype)
+    end
+    nothing
+end
+
+function LegendDataTypes.readdata(
+    input::HDF5.DataFile, name::AbstractString,
+    ::Type{<:String}
+)
+    dset = input[name]
+    read(dset)#::AT
+end
+
+
+function LegendDataTypes.writedata(
+    output::HDF5.DataFile, name::AbstractString,
+    x::Symbol,
+    fulldatatype::DataType = typeof(x)
+)
+    writedata(output, name, String(x), fulldatatype)
+end
+
+function LegendDataTypes.readdata(
+    input::HDF5.DataFile, name::AbstractString,
+    ::Type{<:Symbol}
+)
+    Symbol(readdata(input, name, String))
+end
 
 
 function LegendDataTypes.writedata(
