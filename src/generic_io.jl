@@ -207,19 +207,19 @@ function LegendDataTypes.readdata(input::Union{HDF5.HDF5Dataset, HDF5.DataFile},
 end
 
 
-function _writedata_impl(
+function LegendDataTypes.writedata(
     output::HDF5.DataFile, name::AbstractString,
     x::Union{T,AbstractArray{T}},
     fulldatatype::DataType = typeof(x)
 ) where {T<:RealQuantity}
     units = unit(eltype(x))
-    # @info "name" name
+    # @debug "name" name
     if units == NoUnits
         # @info "without units"
         #output[name, "shuffle", (), "deflate", 3] = x
         output[name] = x
     else
-        # @info "with units"
+        # @debug "with units"
         output[name] = ustrip.(x)
         setunits!(output[name], units)
     end
@@ -229,10 +229,10 @@ function _writedata_impl(
     nothing
 end
 
-function _readdata_impl(
+function LegendDataTypes.readdata(
     input::HDF5.DataFile, name::AbstractString,
-    ::Type{AT}
-) where {AT<:Union{RealQuantity,AbstractArray}}
+    ::Type{<:Union{RealQuantity,AbstractArray}}
+)
     dset = input[name]
     data = read(dset)#::AT
     units = getunits(dset)
@@ -241,38 +241,6 @@ function _readdata_impl(
     else
         data * units
     end
-end
-
-
-function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
-    x::RealQuantity,
-    fulldatatype::DataType = typeof(x)
-)
-    _writedata_impl(output, name, x, fulldatatype)
-end
-
-function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
-    ::Type{<:RealQuantity}
-)
-    _readdata_imp(input, name, AT)
-end
-
-
-function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
-    x::AbstractArray{<:RealQuantity},
-    fulldatatype::DataType = typeof(x)
-)
-    _writedata_impl(output, name, x, fulldatatype)
-end
-
-function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
-    ::Type{AT}
-) where {AT<:AbstractArray{<:RealQuantity}}
-    _readdata_impl(input, name, AT)
 end
 
 
