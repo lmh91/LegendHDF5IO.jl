@@ -31,6 +31,9 @@ Base.@propagate_inbounds _tuple_droplast(x::NTuple{N,Any}, ::Val{M}) where {N,M}
 _namedtuple_type(members::AbstractVector{<:AbstractString}) = NamedTuple{(Symbol.(members)...,)}
 
 
+const _datatype_dict = Dict{String,DataType}()
+
+
 function datatype_from_string(s::AbstractString, dset_size::NTuple{L_dset,Integer}) where L_dset
     N_dset = length(dset_size)
     #@info "datatype_from_string(\"$s\", $dset_size)"
@@ -44,6 +47,8 @@ function datatype_from_string(s::AbstractString, dset_size::NTuple{L_dset,Intege
     elseif s == "symbol"
         # dset_size == () || ...
         Symbol
+    elseif haskey(_datatype_dict, s)
+        _datatype_dict[s]
     else
         m = match(datatype_regexp, s)
         m isa Nothing && throw(ErrorException("Invalid datatype string \"$s\""))
@@ -96,6 +101,8 @@ end
 
 
 datatype_to_string(::Type{<:RealQuantity}) = "real"
+
+datatype_to_string(T::Type{<:Enum{U}}) where {U} = "enum{"*join(broadcast(x -> "$(string(x))=$(U(x))", instances.(T)), ",")*"}"
 
 datatype_to_string(::Type{<:AbstractString}) = "string"
 
@@ -200,7 +207,7 @@ function LegendDataTypes.readdata(input::Union{HDF5.HDF5Dataset, HDF5.DataFile},
 end
 
 
-function LegendDataTypes.writedata(
+function _writedata_impl(
     output::HDF5.DataFile, name::AbstractString,
     x::Union{T,AbstractArray{T}},
     fulldatatype::DataType = typeof(x)
@@ -222,7 +229,7 @@ function LegendDataTypes.writedata(
     nothing
 end
 
-function LegendDataTypes.readdata(
+function _readdata_impl(
     input::HDF5.DataFile, name::AbstractString,
     ::Type{AT}
 ) where {AT<:Union{RealQuantity,AbstractArray}}
@@ -234,6 +241,56 @@ function LegendDataTypes.readdata(
     else
         data * units
     end
+end
+
+
+function LegendDataTypes.writedata(
+    output::HDF5.DataFile, name::AbstractString,
+    x::RealQuantity,
+    fulldatatype::DataType = typeof(x)
+)
+    _writedata_impl(output, name, x, fulldatatype)
+end
+
+function LegendDataTypes.readdata(
+    input::HDF5.DataFile, name::AbstractString,
+    ::Type{<:RealQuantity}
+)
+    _readdata_imp(input, name, AT)
+end
+
+
+function LegendDataTypes.writedata(
+    output::HDF5.DataFile, name::AbstractString,
+    x::AbstractArray{<:RealQuantity},
+    fulldatatype::DataType = typeof(x)
+)
+    _writedata_impl(output, name, x, fulldatatype)
+end
+
+function LegendDataTypes.readdata(
+    input::HDF5.DataFile, name::AbstractString,
+    ::Type{AT}
+) where {AT<:AbstractArray{<:RealQuantity}}
+    _readdata_impl(input, name, AT)
+end
+
+
+function LegendDataTypes.writedata(
+    output::HDF5.DataFile, name::AbstractString,
+    x::AbstractArray{<:Enum{T}},
+    fulldatatype::DataType = typeof(x)
+) where {T}
+    writedata(output, name, reinterpret(T, x), fulldatatype)
+end
+
+function LegendDataTypes.readdata(
+    input::HDF5.DataFile, name::AbstractString,
+    AT::Type{<:AbstractArray{<:Enum}}
+)
+    ET = AT.body.parameters[1].ub
+    data = readdata(input, name, AbstractArray{RealQuantity})
+    ET.(data)
 end
 
 
@@ -374,7 +431,6 @@ function LegendDataTypes.readdata(
 )
     syms = AT.body.parameters[1]
     NamedTuple{syms}(map(k -> readdata(input, "$name/$k"), syms))
-
 end
 
 

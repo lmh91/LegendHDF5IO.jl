@@ -23,4 +23,9 @@ using RadiationDetectorSignals: RealQuantity, ArrayOfDims, AosAOfDims, SArrayOfD
 
 include("generic_io.jl")
 
+
+function __init__()
+    _datatype_dict[LegendHDF5IO.datatype_to_string(EventType)] = EventType
+end
+
 end # module
