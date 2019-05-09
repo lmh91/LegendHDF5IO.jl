@@ -9,6 +9,7 @@ using ElasticArrays
 using LegendDataTypes
 using RadiationDetectorSignals
 using StaticArrays
+using StructArrays
 using Tables
 using Unitful
 
@@ -22,6 +23,7 @@ using RadiationDetectorSignals: RealQuantity, ArrayOfDims, AosAOfDims, SArrayOfD
 
 
 include("generic_io.jl")
+include("radsig_io.jl")
 
 
 function __init__()
