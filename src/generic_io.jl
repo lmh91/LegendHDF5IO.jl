@@ -333,7 +333,9 @@ function LegendDataTypes.readdata(
     AT::Type{<:AbstractArray{<:AbstractArray}}
 )
     data = readdata(input, name, AbstractArray)
-    clen = read(input["$(name)_clen"])
+    dset = input[name]
+    clen_ref = read(HDF5.attrs(dset)["cumsum_length"])
+    clen = read(dset.file[clen_ref])
     VectorOfVectors(data, _element_ptrs(clen))
 end
 
@@ -344,7 +346,9 @@ function LegendDataTypes.readdata(
 )
     data = readdata(input, name, AbstractArray)
     nested_data = copy(nestedview(data, SVector{3}))
-    clen = read(input["$(name)_clen"])
+    dset = input[name]
+    clen_ref = read(HDF5.attrs(input[name])["cumsum_length"])
+    clen = read(dset.file[clen_ref])
     VectorOfVectors(nested_data, _element_ptrs(clen))
 end
 
@@ -356,8 +360,12 @@ function LegendDataTypes.writedata(
 ) where {T,N}
     writedata(output, name, flatview(x), fulldatatype)
     dset = output[name]
-    setattribute!(dset, :cumsum_length_ds, "$(name)_clen")
     output["$(name)_clen"] = _cumulative_length(x)
+
+    clen_ds = output["$(name)_clen"]
+    clen_ref = HDF5.HDF5ReferenceObj(clen_ds.file, HDF5.name(clen_ds))
+    HDF5.attrs(dset)["cumsum_length"] = clen_ref
+
     nothing
 end
 
