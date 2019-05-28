@@ -17,8 +17,7 @@ using Unitful
 import HDF5
 import TypedTables
 
-using LegendDataTypes: readdata, writedata, getunits, setunits!, units_from_string, units_to_string,
-    AbstractCodec, EncodedData, encode, decode, encode_multi, decode_multi, RadwareSigcompress
+using LegendDataTypes: readdata, writedata, getunits, setunits!, units_from_string, units_to_string
 
 using RadiationDetectorSignals: RealQuantity, ArrayOfDims, AosAOfDims, SArrayOfDims,
     recursive_ndims

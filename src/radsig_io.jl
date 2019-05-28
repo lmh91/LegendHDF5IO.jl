@@ -9,7 +9,7 @@ function to_table(x::AbstractVector{<:RDWaveform})
     )
 
     codec = RadwareSigcompress(typemin(Int16))
-    encvalues = encode_multi(codec, x.v)
+    encvalues = x.v |> codec
 
     TypedTables.Table(
         t0 = tmp.t0,
