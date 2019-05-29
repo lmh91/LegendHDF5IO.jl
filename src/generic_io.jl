@@ -147,13 +147,29 @@ end
 # _with_units(A::Array, unit::Unitful.Unitlike) = A * unit
 
 
-function getattribute(
-    obj::Union{HDF5.HDF5Dataset, HDF5.HDF5.DataFile}, key::Symbol, default_value::T
+function hasattribute(
+    obj::Union{HDF5.HDF5Dataset, HDF5.HDF5.DataFile}, key::Symbol
 ) where {T<:Union{AbstractString,Real}}
     key_str = String(key)
     attributes = HDF5.attrs(obj)
-    if HDF5.exists(attributes, key_str)
-        convert(T, read(attributes[key_str]))
+    HDF5.exists(attributes, key_str)
+end
+
+
+function getattribute(
+    obj::Union{HDF5.HDF5Dataset, HDF5.HDF5.DataFile}, key::Symbol, ::Type{T}
+) where {T<:Union{AbstractString,Real,HDF5.HDF5ReferenceObj}}
+    key_str = String(key)
+    attributes = HDF5.attrs(obj)
+    x = read(attributes[key_str])
+    x isa T ? x : convert(T, x)
+end
+
+function getattribute(
+    obj::Union{HDF5.HDF5Dataset, HDF5.HDF5.DataFile}, key::Symbol, default_value::T
+) where {T<:Union{AbstractString,Real}}
+    if hasattribute(obj, key)
+        getattribute(obj, key, T)
     else
         default_value
     end
@@ -162,10 +178,16 @@ end
 
 function setattribute!(
     obj::Union{HDF5.HDF5Dataset, HDF5.HDF5Group}, key::Symbol,
-    value::Union{AbstractString,Real}
+    value::Union{AbstractString,Real,HDF5.HDF5ReferenceObj}
 )
     HDF5.attrs(obj)[String(key)] = value
 end
+
+
+
+h5ref(ds::HDF5.HDF5Dataset) = HDF5.HDF5ReferenceObj(ds.file, HDF5.name(ds))
+
+h5deref(ref::HDF5.HDF5ReferenceObj, context::Union{HDF5.HDF5Dataset, HDF5.HDF5Group}) = context.file[ref]
 
 
 LegendDataTypes.getunits(dset::HDF5.HDF5Dataset) = units_from_string(getattribute(dset, :units, ""))
@@ -317,26 +339,32 @@ function LegendDataTypes.readdata(
 end
 
 
-# # Obsolete?
-# function LegendDataTypes.writedata(
-#     output::HDF5.DataFile, name::AbstractString,
-#     x::AbstractArray{T,N},
-#     fulldatatype::DataType = typeof(x)
-# ) where {T<:Number,N}
-#     output[name] = ustrip(x)
-#     nothing
-# end
-
-
 function LegendDataTypes.readdata(
     input::HDF5.DataFile, name::AbstractString,
     AT::Type{<:AbstractArray{<:AbstractArray}}
 )
     data = readdata(input, name, AbstractArray)
     dset = input[name]
-    clen_ref = read(HDF5.attrs(dset)["cumsum_length"])
-    clen = read(dset.file[clen_ref])
-    VectorOfVectors(data, _element_ptrs(clen))
+    clen = read(h5deref(getattribute(dset, :cumsum_length, HDF5.HDF5ReferenceObj), dset))
+    data_vec = VectorOfVectors(data, _element_ptrs(clen))
+
+    if hasattribute(dset, :codec)
+        codec_name = Symbol(getattribute(dset, :codec, String))
+        C = LegendDataTypes.array_codecs[codec_name]
+        codec = read_from_properties(getattribute, dset, C)
+        n = length(data_vec)
+        codec_vec = StructArray(fill(codec, n)) # ToDo: Improve
+        decoded_length = read(h5deref(getattribute(dset, :decoded_length, HDF5.HDF5ReferenceObj), dset))
+        size_vec = broadcast(x -> (Int(x),), decoded_length)
+
+        StructArray{EncodedArray{Int32,1,C,Vector{UInt8}}}((
+            codec_vec,
+            size_vec,
+            data_vec
+        ))
+    else
+        data_vec
+    end
 end
 
 # Hack:
@@ -347,24 +375,42 @@ function LegendDataTypes.readdata(
     data = readdata(input, name, AbstractArray)
     nested_data = copy(nestedview(data, SVector{3}))
     dset = input[name]
-    clen_ref = read(HDF5.attrs(input[name])["cumsum_length"])
-    clen = read(dset.file[clen_ref])
+    clen = read(h5deref(getattribute(dset, :cumsum_length, HDF5.HDF5ReferenceObj), dset))
     VectorOfVectors(nested_data, _element_ptrs(clen))
 end
 
-
 function LegendDataTypes.writedata(
     output::HDF5.DataFile, name::AbstractString,
-    x::VectorOfVectors{T,N},
+    x::VectorOfArrays{T,1},
     fulldatatype::DataType = typeof(x)
 ) where {T,N}
     writedata(output, name, flatview(x), fulldatatype)
     dset = output[name]
     output["$(name)_clen"] = _cumulative_length(x)
+    setattribute!(dset, :cumsum_length, h5ref(output["$(name)_clen"]))
+    nothing
+end
 
-    clen_ds = output["$(name)_clen"]
-    clen_ref = HDF5.HDF5ReferenceObj(clen_ds.file, HDF5.name(clen_ds))
-    HDF5.attrs(dset)["cumsum_length"] = clen_ref
+function LegendDataTypes.writedata(
+    output::HDF5.DataFile, name::AbstractString,
+    x::VectorOfEncodedArrays{T,1,C},
+    fulldatatype::DataType = typeof(x)
+) where {T,N,C}
+    codec = first(x.codec)
+    @inbounds for c in x.codec
+        c != codec && throw("Can't write VectorOfEncodedArrays that has non-uniform codec parameters")
+    end
+
+    writedata(output, name, x.encoded, fulldatatype)
+    dset = output[name]
+    decoded_length = Int32.(prod.(x.size))
+    output["$(name)_declen"] = decoded_length
+    decsize_vec_ds = output["$(name)_declen"]
+    setattribute!(dset, :decoded_length, h5ref(decsize_vec_ds))
+ 
+    codec_name = LegendDataTypes.array_codecs[C]
+    setattribute!(dset, :codec, String(codec_name))
+    write_to_properties!(setattribute!, dset, codec)
 
     nothing
 end

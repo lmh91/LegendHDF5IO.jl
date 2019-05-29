@@ -17,14 +17,15 @@ using Unitful
 import HDF5
 import TypedTables
 
-using LegendDataTypes: readdata, writedata, getunits, setunits!, units_from_string, units_to_string
+using LegendDataTypes: readdata, writedata, getunits, setunits!,
+    units_from_string, units_to_string,
+    read_from_properties, write_to_properties!
 
 using RadiationDetectorSignals: RealQuantity, ArrayOfDims, AosAOfDims, SArrayOfDims,
     recursive_ndims
 
 
 include("generic_io.jl")
-include("codec_io.jl")
 include("radsig_io.jl")
 
 
