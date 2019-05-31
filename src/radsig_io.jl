@@ -23,6 +23,10 @@ function from_table(tbl, ::Type{<:AbstractVector{<:RDWaveform}})
 end
 
 
+datatype_to_string(::Type{<:RDWaveform}) = "waveform"
+
+
+
 function LegendDataTypes.writedata(
     output::HDF5.DataFile, name::AbstractString,
     x::AbstractVector{<:RDWaveform},

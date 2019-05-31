@@ -1,10 +1,8 @@
 # This file is a part of LegendHDF5IO.jl, licensed under the MIT License (MIT
 
 
-#!!! TODO: LegendHDF5File, LegendHDF5Input, LegendHDF5Output
+# TODO: LegendHDF5File, LegendHDF5Input, LegendHDF5Output
 # with Base.read/write, open/close, etc., and atomic file names.
-
-# use :semantictype attribute for high-level meaning of datatypes
 
 
 const default_compression = ("shuffle", (), "deflate", 3)
@@ -13,13 +11,11 @@ const default_compression = ("shuffle", (), "deflate", 3)
 const datatype_regexp = r"""^(([A-Za-z_]*)(<([0-9,]*)>)?)(\{(.*)\})?$"""
 const arraydims_regexp = r"""^<([0-9,]*)>$"""
 
-function _eldatatype_from_string(s::Union{Nothing,AbstractString}, element_dset_size::NTuple{L_dset,Integer}) where L_dset
-    N = length(element_dset_size)
+function _eldatatype_from_string(s::Union{Nothing,AbstractString}) where L_dset
     if s == nothing || s == ""
-        N == 0 || throw(ErrorException("Array element specified as scalar, but $N unused trailing dimensions in dataset"))
         RealQuantity
     else
-        datatype_from_string(s, element_dset_size)
+        datatype_from_string(s)
     end
 end
 
@@ -31,18 +27,12 @@ Base.@propagate_inbounds _tuple_droplast(x::NTuple{N,Any}, ::Val{M}) where {N,M}
 _namedtuple_type(members::AbstractVector{<:AbstractString}) = NamedTuple{(Symbol.(members)...,)}
 
 
-function datatype_from_string(s::AbstractString, dset_size::NTuple{L_dset,Integer}) where L_dset
-    N_dset = length(dset_size)
-    #@info "datatype_from_string(\"$s\", $dset_size)"
-
+function datatype_from_string(s::AbstractString) where L_dset
     if s == "real"
-        #!!! N_dset == 0 || throw(ErrorException("Array element specified as scalar, but $N_dset unused trailing dimensions in dataset"))
         RealQuantity
     elseif s == "string"
-        # dset_size == () || ...
         String
     elseif s == "symbol"
-        # dset_size == () || ...
         Symbol
     elseif haskey(_datatype_dict, s)
         _datatype_dict[s]
@@ -52,39 +42,38 @@ function datatype_from_string(s::AbstractString, dset_size::NTuple{L_dset,Intege
         tp = m[2]
         content = m[6]
         if tp == "struct"
-            #!!! @assert dset_size == ()
             _namedtuple_type(split(content, ","))
         elseif tp == "table"
-            @assert dset_size == ()
             TypedTables.Table{<:_namedtuple_type(split(content, ","))}
+        elseif tp == "ntuple"
+            T = _eldatatype_from_string(content)
+            (NTuple{N,<:T} where N)
         else
             dims = parse.(Int, split(m[4], ","))
             eltp = content
+            T = _eldatatype_from_string(eltp)
             if tp == "array_of_equalsized_arrays"
                 length(dims) == 2 || throw(ErrorException("Invalid dims $dims for datatype \"$tp\""))
-                M = dims[1]; N = dims[2]
-                L = M + N
-                #!!! L <= L_dset || throw(ErrorException("Expected $M + $N dimensions, but dataset has $L_dset dimensions"))
+                N = dims[1]; M = dims[2]
                 # T isa Array || throw(ErrorException("Datatype \"$tp\" with \"array\" nested in \"array_of_equalsized_arrays\" currently not supported"))
-                #!!! T = _eldatatype_from_string(eltp, _tuple_droplast(dset_size, Val(L)))
-                T = _eldatatype_from_string(eltp, dset_size)
                 AbstractArrayOfSimilarArrays{<:T,M,N}
-            else
+            elseif tp == "array_of_encoded_arrays"
+                length(dims) == 2 || throw(ErrorException("Invalid dims $dims for datatype \"$tp\""))
+                N = dims[1]; M = dims[2]
+                N != 2 || throw(ErrorException("Only one-dimensional arrays of encoded arrays are supported"))
+                VectorOfEncodedArrays{<:T,dims[1]}
+            elseif tp == "fixedsize_array"
                 length(dims) == 1 || throw(ErrorException("Invalid dims $dims for datatype \"$tp\""))
                 N = dims[1]
-                #!!! N <= N_dset || throw(ErrorException("Expected $dims dimensions, but dataset has $N_dset dimensions"))
-                #!!! T = _eldatatype_from_string(eltp, _tuple_droplast(dset_size, Val(N)))
-                T = _eldatatype_from_string(eltp, dset_size)
-                if tp == "fixedsize_array"
-                    N == 1  || throw(ErrorException("Datatype fixedsize_array with $dims dims currently not supported\"$tp\""))
-                    # T <: RealQuantity || throw(ErrorException("Element type \"$eltp\" in datatype \"$tp\" currently not supported"))
-                    #@info dset_size
-                    StaticArray{Tuple{dset_size[1]},<:T,1} where {TPL}
-                elseif tp == "array"
-                    AbstractArray{<:T,N}
-                else
-                    throw(ErrorException("Unknown datatype \"$tp\""))
-                end
+                N == 1  || throw(ErrorException("Datatype fixedsize_array with $dims dims currently not supported\"$tp\""))
+                # T <: RealQuantity || throw(ErrorException("Element type \"$eltp\" in datatype \"$tp\" currently not supported"))
+                StaticArray{Tuple{L},<:T,1} where {L}
+            elseif tp == "array"
+                length(dims) == 1 || throw(ErrorException("Invalid dims $dims for datatype \"$tp\""))
+                N = dims[1]
+                AbstractArray{<:T,N}
+            else
+                throw(ErrorException("Unknown datatype \"$tp\""))
             end
         end
     end
@@ -105,6 +94,8 @@ datatype_to_string(::Type{<:AbstractString}) = "string"
 
 datatype_to_string(::Type{<:Symbol}) = "symbol"
 
+datatype_to_string(::Type{NTuple{N,T}}) where {N,T} = "ntuple$(_inner_datatype_to_string(T))"
+
 datatype_to_string(::Type{<:AbstractArray{T,N}}) where {T,N} =
     "array<$N>$(_inner_datatype_to_string(T))"
 
@@ -112,7 +103,10 @@ datatype_to_string(::Type{<:StaticArray{TPL,T,N}}) where {TPL,T<:RealQuantity,N}
     "fixedsize_array<$N>$(_inner_datatype_to_string(T))"
 
 datatype_to_string(::Type{<:ArrayOfSimilarArrays{T,M,N}}) where {T,M,N} =
-    "array_of_equalsized_arrays<$M,$N>$(_inner_datatype_to_string(T))"
+    "array_of_equalsized_arrays<$N,$M>$(_inner_datatype_to_string(T))"
+
+datatype_to_string(::Type{<:VectorOfEncodedArrays{T,N}}) where {T,N} =
+    "array_of_encoded_arrays<1,$N>$(_inner_datatype_to_string(T))"
 
 datatype_to_string(::Type{<:NamedTuple{K}}) where K = "struct{$(join(K,","))}"
 
@@ -135,8 +129,13 @@ function _cumulative_length(A::VectorOfArrays)
     elem_ptr[(firstindex(elem_ptr) + 1):end] .- first(elem_ptr)
 end
 
+function _cumulative_length(A::AbstractVector{<:AbstractArray})
+    # ToDo: improve implementation
+    cumsum(length.(eachindex.(A)))
+end
+
 function _element_ptrs(clen::Vector{<:Integer})
-    vcat([1], clen .+ 1)
+    vcat([1], Int.(clen) .+ 1)
 end
 
 
@@ -189,7 +188,11 @@ h5deref(ref::HDF5.HDF5ReferenceObj, context::Union{HDF5.HDF5Dataset, HDF5.HDF5Gr
 
 LegendDataTypes.getunits(dset::HDF5.HDF5Dataset) = units_from_string(getattribute(dset, :units, ""))
 
-LegendDataTypes.setunits!(dset::HDF5.HDF5Dataset, units::Unitful.Unitlike) = setattribute!(dset, :units, units_to_string(units))
+function LegendDataTypes.setunits!(dset::HDF5.HDF5Dataset, units::Unitful.Unitlike)
+    ustr = units_to_string(units)
+    # @debug "setunits!($(_infostring(dset)), \"$ustr\")"
+    setattribute!(dset, :units, ustr)
+end
 
 
 default_datatype(dset::HDF5.HDF5Dataset) = AbstractArray{<:RealQuantity,length(size(dset))}
@@ -198,14 +201,22 @@ default_datatype(df::HDF5.DataFile) = NamedTuple{(Symbol.(names(df))...,)}
 _size(dset::HDF5.HDF5Dataset) = size(dset)
 _size(df::HDF5.DataFile) = ()
 
+# HDF5.DataFile
+# HDF5.HDF5Dataset
+_infostring(x::HDF5.HDF5Group) = "group \"$(HDF5.name(x))\""
+_infostring(x::HDF5.HDF5Dataset) = "dataset \"$(HDF5.name(x))\" with size $(size(x)) of $(eltype(x))"
+
 function getdatatype(input::Union{HDF5.HDF5Dataset, HDF5.DataFile})
     dtstr = getattribute(input, :datatype, "")
-    sz = _size(input)
-    isempty(dtstr) ? default_datatype(input) : datatype_from_string(dtstr, sz)
+    dt = isempty(dtstr) ? default_datatype(input) : datatype_from_string(dtstr)
+    # @debug "getdatatype($(_infostring(input))) = $dt"
+    dt
 end
 
 function setdatatype!(output::Union{HDF5.HDF5Dataset, HDF5.DataFile}, datatype::Type)
-    setattribute!(output, :datatype, datatype_to_string(datatype))
+    dtstr = datatype_to_string(datatype)
+    # @debug "setdatatype!($(_infostring(output)), \"$dtstr\")"
+    setattribute!(output, :datatype, dtstr)
 end
 
 
@@ -234,7 +245,7 @@ function LegendDataTypes.writedata(
     units = unit(eltype(x))
     # @debug "name" name
     if units == NoUnits
-        # @info "without units"
+        # @debug "without units"
         #output[name, "shuffle", (), "deflate", 3] = x
         output[name] = x
     else
@@ -281,6 +292,41 @@ function LegendDataTypes.readdata(
 end
 
 
+_ntuple_flatview(A::AbstractArray{TPL,N}) where {L,T,N,TPL<:NTuple{L,T}} =
+    reshape(reinterpret(T, A), L, size(A)...)
+
+function _ntuple_nestedview(A::AbstractArray{T}, TPL::Type{NTuple{L,T}}) where {L,T}
+    size_A = size(A)
+    size_A[1] == L || throw(DimensionMismatch("Length $L of NTuple type does not match first dimension of array of size $size_A"))
+    reshape(reinterpret(TPL, A), Base.tail(size_A)...)
+end
+
+@inline _ntuple_innersize(A::AbstractArray{NTuple{L,T}}) where {L,T} = L
+
+function LegendDataTypes.writedata(
+    output::HDF5.DataFile, name::AbstractString,
+    x::AbstractArray{T,N},
+    fulldatatype::DataType = typeof(x)
+) where {L,T<:NTuple{L,RealQuantity},N}
+    writedata(output, name, _ntuple_flatview(x), fulldatatype)
+end
+
+function LegendDataTypes.readdata(
+    input::HDF5.DataFile, name::AbstractString,
+    AT::Type{<:AbstractArray{<:NTuple}}
+)
+    N = length(size(input[name])) - 1
+    data = readdata(input, name, AbstractArray{RealQuantity,N})
+    SV = AT.var.ub
+    L = size(data, 1)
+    if SV isa DataType
+        L_expected = SV.parameters[1].parameters[1][1]
+        L_expected == L || throw(ErrorException("Trying to read array of NTuples of length $L_expected, but inner dimension of data has length $L"))
+    end
+    _ntuple_nestedview(data, NTuple{L,eltype(data)})
+end
+
+
 function LegendDataTypes.writedata(
     output::HDF5.DataFile, name::AbstractString,
     x::AbstractArray{T,N},
@@ -289,13 +335,19 @@ function LegendDataTypes.writedata(
     writedata(output, name, flatview(x), fulldatatype)
 end
 
-
 function LegendDataTypes.readdata(
     input::HDF5.DataFile, name::AbstractString,
-    AT::Type{<:AbstractArray{<:StaticArray{Tuple{N}}}}
-) where {N}
-    data = readdata(input, name, AbstractArray{RealQuantity,2})
-    nestedview(data, SVector{N})
+    AT::Type{<:AbstractArray{<:StaticVector}}
+)
+    N = length(size(input[name])) - 1
+    data = readdata(input, name, AbstractArray{RealQuantity,N})
+    SV = AT.var.ub
+    L = size(data, 1)
+    if SV isa DataType
+        L_expected = SV.parameters[1].parameters[1][1]
+        L_expected == L || throw(ErrorException("Trying to read array of static vectors of length $L_expected, but inner dimension of data has length $L"))
+    end
+    nestedview(data, SVector{L})
 end
 
 
@@ -336,57 +388,27 @@ function LegendDataTypes.readdata(
 end
 
 
-function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
-    AT::Type{<:AbstractArray{<:AbstractArray}}
-)
-    data = readdata(input, name, AbstractArray)
-    dset = input[name]
-    clen = read(h5deref(getattribute(dset, :cumsum_length, HDF5.HDF5ReferenceObj), dset))
-    data_vec = VectorOfVectors(data, _element_ptrs(clen))
-
-    if hasattribute(dset, :codec)
-        codec_name = Symbol(getattribute(dset, :codec, String))
-        C = LegendDataTypes.array_codecs[codec_name]
-        codec = read_from_properties(getattribute, dset, C)
-        n = length(data_vec)
-        codec_vec = StructArray(fill(codec, n)) # ToDo: Improve
-        decoded_length = read(h5deref(getattribute(dset, :decoded_length, HDF5.HDF5ReferenceObj), dset))
-        size_vec = broadcast(x -> (Int(x),), decoded_length)
-
-        StructArray{EncodedArray{Int32,1,C,Vector{UInt8}}}((
-            codec_vec,
-            size_vec,
-            data_vec
-        ))
-    else
-        data_vec
-    end
-end
-
-# Hack:
-function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
-    AT::Type{<:AbstractArray{<:AbstractArray{<:StaticVector{3}}}}
-)
-    data = readdata(input, name, AbstractArray)
-    nested_data = copy(nestedview(data, SVector{3}))
-    dset = input[name]
-    clen = read(h5deref(getattribute(dset, :cumsum_length, HDF5.HDF5ReferenceObj), dset))
-    VectorOfVectors(nested_data, _element_ptrs(clen))
-end
-
 function LegendDataTypes.writedata(
     output::HDF5.DataFile, name::AbstractString,
     x::VectorOfArrays{T,1},
     fulldatatype::DataType = typeof(x)
 ) where {T,N}
-    writedata(output, name, flatview(x), fulldatatype)
-    dset = output[name]
-    output["$(name)_clen"] = _cumulative_length(x)
-    setattribute!(dset, :cumsum_length, h5ref(output["$(name)_clen"]))
+    writedata(output, "$(name)/flattened_data", flatview(x))
+    writedata(output, "$(name)/cumulative_length", _cumulative_length(x))
+    setdatatype!(output[name], fulldatatype)
     nothing
 end
+
+function LegendDataTypes.readdata(
+    input::HDF5.DataFile, name::AbstractString,
+    AT::Type{<:AbstractArray{<:AbstractArray}}
+)
+    data = readdata(input, "$name/flattened_data")
+    clen = readdata(input, "$name/cumulative_length")
+    data_vec = VectorOfVectors(data, _element_ptrs(clen))
+end
+
+
 
 function LegendDataTypes.writedata(
     output::HDF5.DataFile, name::AbstractString,
@@ -398,18 +420,48 @@ function LegendDataTypes.writedata(
         c != codec && throw("Can't write VectorOfEncodedArrays that has non-uniform codec parameters")
     end
 
-    writedata(output, name, x.encoded, fulldatatype)
-    dset = output[name]
-    decoded_length = Int32.(prod.(x.size))
-    output["$(name)_declen"] = decoded_length
-    decsize_vec_ds = output["$(name)_declen"]
-    setattribute!(dset, :decoded_length, h5ref(decsize_vec_ds))
+    writedata(output, "$name/encoded_data", x.encoded)
+    writedata(output, "$name/decoded_size", x.size)
  
+    dset = output[name]
+
     codec_name = LegendDataTypes.array_codecs[C]
     setattribute!(dset, :codec, String(codec_name))
     write_to_properties!(setattribute!, dset, codec)
 
+    setdatatype!(dset, fulldatatype)
     nothing
+end
+
+function LegendDataTypes.readdata(
+    input::HDF5.DataFile, name::AbstractString,
+    AT::Type{<:VectorOfEncodedArrays}
+)
+    data_vec = readdata(input, "$name/encoded_data")
+    size_vec = readdata(input, "$name/decoded_size")
+    N = _ntuple_innersize(size_vec)
+
+    SV = AT.var.ub
+    if SV isa DataType
+        N_expected = SV.parameters[1].parameters[1][1]
+        N_expected == N || throw(ErrorException("Trying to read a vector of encoded arrays with $N_expected dimensions, but data indicates $N dimensions"))
+    end
+
+    dset = input[name]
+
+    codec_name = Symbol(getattribute(dset, :codec, String))
+    C = LegendDataTypes.array_codecs[codec_name]
+    codec = read_from_properties(getattribute, dset, C)
+    n = length(data_vec)
+    codec_vec = StructArray(fill(codec, n)) # ToDo: Improve
+
+    StructArray{EncodedArray{Int32,N,C,Vector{UInt8}}}(
+        (
+            codec_vec,
+            size_vec,
+            data_vec
+        )
+    )
 end
 
 
@@ -458,6 +510,7 @@ function LegendDataTypes.writedata(
     x::Any,
     fulldatatype::DataType = typeof(x)
 )
+    # @debug("writedata(\"$(HDF5.name(output))\", \"$name\", $fulldatatype")
     Tables.istable(x) || throw(ArgumentError("Value to write, of type $(typeof(x)),is not a table"))
     cols = Tables.columns(x)
     writedata(output, name, cols, fulldatatype)

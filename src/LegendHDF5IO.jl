@@ -29,11 +29,12 @@ include("generic_io.jl")
 include("radsig_io.jl")
 
 
-const _datatype_dict = Dict{String,DataType}()
+const _datatype_dict = Dict{String,Type}()
 
 
 function __init__()
     _datatype_dict[datatype_to_string(EventType)] = EventType
+    _datatype_dict[datatype_to_string(RDWaveform)] = RDWaveform
 end
 
 end # module
