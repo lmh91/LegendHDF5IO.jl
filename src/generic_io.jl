@@ -31,9 +31,6 @@ Base.@propagate_inbounds _tuple_droplast(x::NTuple{N,Any}, ::Val{M}) where {N,M}
 _namedtuple_type(members::AbstractVector{<:AbstractString}) = NamedTuple{(Symbol.(members)...,)}
 
 
-const _datatype_dict = Dict{String,DataType}()
-
-
 function datatype_from_string(s::AbstractString, dset_size::NTuple{L_dset,Integer}) where L_dset
     N_dset = length(dset_size)
     #@info "datatype_from_string(\"$s\", $dset_size)"
