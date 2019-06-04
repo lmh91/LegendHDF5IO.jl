@@ -154,7 +154,7 @@ end
 
 function getattribute(
     obj::Union{HDF5.HDF5Dataset, HDF5.HDF5.DataFile}, key::Symbol, ::Type{T}
-) where {T<:Union{AbstractString,Real,HDF5.HDF5ReferenceObj}}
+) where {T<:Union{AbstractString,Real}}
     key_str = String(key)
     attributes = HDF5.attrs(obj)
     x = read(attributes[key_str])
@@ -174,16 +174,11 @@ end
 
 function setattribute!(
     obj::Union{HDF5.HDF5Dataset, HDF5.HDF5Group}, key::Symbol,
-    value::Union{AbstractString,Real,HDF5.HDF5ReferenceObj}
+    value::Union{AbstractString,Real}
 )
     HDF5.attrs(obj)[String(key)] = value
 end
 
-
-
-h5ref(ds::HDF5.HDF5Dataset) = HDF5.HDF5ReferenceObj(ds.file, HDF5.name(ds))
-
-h5deref(ref::HDF5.HDF5ReferenceObj, context::Union{HDF5.HDF5Dataset, HDF5.HDF5Group}) = context.file[ref]
 
 
 LegendDataTypes.getunits(dset::HDF5.HDF5Dataset) = units_from_string(getattribute(dset, :units, ""))
