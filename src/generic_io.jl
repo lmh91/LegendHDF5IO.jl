@@ -174,11 +174,23 @@ end
 
 function setattribute!(
     obj::Union{HDF5.HDF5Dataset, HDF5.HDF5Group}, key::Symbol,
-    value::Union{AbstractString,Real}
+    value::Real
 )
     HDF5.attrs(obj)[String(key)] = value
+    nothing
 end
 
+
+function setattribute!(
+    obj::Union{HDF5.HDF5Dataset, HDF5.HDF5Group}, key::Symbol,
+    value::AbstractString
+)
+    # Write variable-length string for h5py compatibility (see https://github.com/h5py/h5py/issues/585).
+    s_arr = Array{String,0}(undef)
+    s_arr[] = convert(String, value)
+    HDF5.attrs(obj)[String(key)] = s_arr
+    nothing
+end
 
 
 LegendDataTypes.getunits(dset::HDF5.HDF5Dataset) = units_from_string(getattribute(dset, :units, ""))
