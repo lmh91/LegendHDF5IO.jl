@@ -299,23 +299,32 @@ function LegendDataTypes.readdata(
 end
 
 
-_ntuple_flatview(A::AbstractArray{TPL,N}) where {L,T,N,TPL<:NTuple{L,T}} =
+function _flatview_of_array_of_ntuple(A::AbstractArray{TPL,N}) where {L,T,N,TPL<:NTuple{L,T}}
     reshape(reinterpret(T, A), L, size(A)...)
-
-function _ntuple_nestedview(A::AbstractArray{T}, TPL::Type{NTuple{L,T}}) where {L,T}
-    size_A = size(A)
-    size_A[1] == L || throw(DimensionMismatch("Length $L of NTuple type does not match first dimension of array of size $size_A"))
-    reshape(reinterpret(TPL, A), Base.tail(size_A)...)
 end
 
-@inline _ntuple_innersize(A::AbstractArray{NTuple{L,T}}) where {L,T} = L
+function _flatview_to_array_of_ntuple(A::AbstractArray{T,N}, TPL::Type{NTuple{L,T}}) where {T,N,L}
+    size_A = size(A)
+    sz_out = Base.tail(size_A)
+    N_out = length(sz_out)
+    size_A[1] == L || throw(DimensionMismatch("Length $L of NTuple type does not match first dimension of array of size $size_A"))
+    tmp = reshape(reinterpret(TPL, A), sz_out...)
+    convert(Array{NTuple{L,T},N_out}, tmp)
+end
+
+_array_of_ntuple_innersize(A::AbstractArray{NTuple{L,T}}) where {L,T} = L
+
+function _array_of_ntuple_innerconv(::Type{T}, A::AbstractArray{NTuple{L,U},N}) where {T,N,L,U}
+    convert(Array{NTuple{L,T},N}, A)
+end
+
 
 function LegendDataTypes.writedata(
     output::HDF5.DataFile, name::AbstractString,
     x::AbstractArray{T,N},
     fulldatatype::DataType = typeof(x)
 ) where {L,T<:NTuple{L,RealQuantity},N}
-    writedata(output, name, _ntuple_flatview(x), fulldatatype)
+    writedata(output, name, _flatview_of_array_of_ntuple(x), fulldatatype)
 end
 
 function LegendDataTypes.readdata(
@@ -330,7 +339,7 @@ function LegendDataTypes.readdata(
         L_expected = SV.parameters[1].parameters[1][1]
         L_expected == L || throw(ErrorException("Trying to read array of NTuples of length $L_expected, but inner dimension of data has length $L"))
     end
-    _ntuple_nestedview(data, NTuple{L,eltype(data)})
+    _flatview_to_array_of_ntuple(data, NTuple{L,eltype(data)})
 end
 
 
@@ -397,9 +406,12 @@ end
 
 function LegendDataTypes.writedata(
     output::HDF5.DataFile, name::AbstractString,
-    x::VectorOfArrays{T,1},
+    x::AbstractArray{<:AbstractArray{T,M},N},
     fulldatatype::DataType = typeof(x)
-) where {T,N}
+) where {T,M,N}
+    N == 1 || throw(ArgumentError("Output of multi-dimensional arrays of arrays to HDF5 is not supported"))
+    # ToDo: Support vectors of multi-dimensional arrays
+    M ==1 || throw(ArgumentError("Output of vectors of multi-dimensional arrays to HDF5 is not supported"))
     writedata(output, "$(name)/flattened_data", flatview(x))
     writedata(output, "$(name)/cumulative_length", _cumulative_length(x))
     setdatatype!(output[name], fulldatatype)
@@ -445,8 +457,9 @@ function LegendDataTypes.readdata(
     AT::Type{<:VectorOfEncodedArrays}
 )
     data_vec = readdata(input, "$name/encoded_data")
-    size_vec = readdata(input, "$name/decoded_size")
-    N = _ntuple_innersize(size_vec)
+    size_vec_in = readdata(input, "$name/decoded_size")
+    N = _array_of_ntuple_innersize(size_vec_in)
+    size_vec = _array_of_ntuple_innerconv(Int, size_vec_in)
 
     SV = AT.var.ub
     if SV isa DataType
