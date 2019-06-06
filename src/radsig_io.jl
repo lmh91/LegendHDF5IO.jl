@@ -33,7 +33,7 @@ function LegendDataTypes.writedata(
     fulldatatype::DataType = typeof(x)
 ) where {T}
     @assert fulldatatype == typeof(x)
-    writedata(output, name, to_table(x))
+    writedata(output, name, to_table(x), fulldatatype)
 end
 
 
