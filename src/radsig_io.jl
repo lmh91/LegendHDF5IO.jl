@@ -3,22 +3,23 @@
 
 function to_table(x::AbstractVector{<:RDWaveform})
     TypedTables.Table(
-        t0 = first.(x.t),
-        dt = step.(x.t),
-        values = x.v
+        t0 = first.(x.time),
+        dt = step.(x.time),
+        values = x.value
     )
 end
 
 
 function _dtt02range(dt::RealQuantity, t0::RealQuantity, values::AbstractVector)
     # TODO: Handle different units for dt and t0
-    t0 .+ (0:(size(values, 1) - 1)) .* dt
+    t_idxs = Int32(0):Int32(size(values,1) - 1)
+    t0 .+ t_idxs .* dt
 end
 
 function from_table(tbl, ::Type{<:AbstractVector{<:RDWaveform}})
     StructArray{RDWaveform}((
-        tbl.values,
-        _dtt02range.(tbl.dt, tbl.t0, tbl.values)
+        _dtt02range.(tbl.dt, tbl.t0, tbl.values),
+        tbl.values
     ))
 end
 
