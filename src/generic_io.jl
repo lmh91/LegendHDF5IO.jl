@@ -285,6 +285,35 @@ function LegendDataTypes.readdata(
 end
 
 
+# Write Bool arrays as arrays of UInt8 for h5py compatibility (see
+# https://github.com/h5py/h5py/issues/641). Issue may be fixed in recent
+# versions of h5py (see https://github.com/h5py/h5py/pull/821).
+function LegendDataTypes.writedata(
+    output::HDF5.DataFile, name::AbstractString,
+    x::Union{Bool,AbstractArray{Bool}},
+    fulldatatype::DataType = typeof(x)
+)
+    data = UInt8.(x)
+    output[name] = data
+    if fulldatatype != Nothing
+        setdatatype!(output[name], fulldatatype)
+    end
+    nothing
+end
+
+function LegendDataTypes.readdata(
+    input::HDF5.DataFile, name::AbstractString,
+    ::Type{<:Union{Bool,AbstractArray{<:Bool}}}
+)
+    dset = input[name]
+    units = getunits(dset)
+    units == NoUnits || throw(ErrorExceptions("Can't interpret dataset with units as Bool values"))
+    data = read(dset)
+    # Broadcast will return BitArray, map would return Array{UInt8}:
+    (x -> x > 0).(data)
+end
+
+
 function LegendDataTypes.writedata(
     output::HDF5.DataFile, name::AbstractString,
     x::AbstractArray{<:Enum{T}},
