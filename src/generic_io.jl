@@ -30,6 +30,8 @@ _namedtuple_type(members::AbstractVector{<:AbstractString}) = NamedTuple{(Symbol
 function datatype_from_string(s::AbstractString) where L_dset
     if s == "real"
         RealQuantity
+    elseif s == "bool"
+        Bool
     elseif s == "string"
         String
     elseif s == "symbol"
@@ -87,6 +89,8 @@ end
 
 
 datatype_to_string(::Type{<:RealQuantity}) = "real"
+
+datatype_to_string(::Type{Bool}) = "bool"
 
 datatype_to_string(T::Type{<:Enum{U}}) where {U} = "enum{"*join(broadcast(x -> "$(string(x))=$(U(x))", instances.(T)), ",")*"}"
 
