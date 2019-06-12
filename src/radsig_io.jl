@@ -24,17 +24,13 @@ function from_table(tbl, ::Type{<:AbstractVector{<:RDWaveform}})
 end
 
 
-datatype_to_string(::Type{<:RDWaveform}) = "waveform"
-
-
-
 function LegendDataTypes.writedata(
     output::HDF5.DataFile, name::AbstractString,
     x::AbstractVector{<:RDWaveform},
     fulldatatype::DataType = typeof(x)
 ) where {T}
     @assert fulldatatype == typeof(x)
-    writedata(output, name, to_table(x), fulldatatype)
+    writedata(output, name, to_table(x))
 end
 
 
