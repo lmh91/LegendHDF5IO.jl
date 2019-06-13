@@ -241,6 +241,26 @@ function getinfo(dset::HDF5.HDF5Dataset)
 end
 
 
+function _getcontent_impl(dset::HDF5.HDF5Dataset, idxs::NTuple{N,Colon}, axs::NTuple{N}) where {N}
+    read(dset)
+end
+
+function _getcontent_impl(dset::HDF5.HDF5Dataset, idxs::Tuple{Integer}, axs::NTuple{0}) where {N}
+    idxs == (1,) || Base.throw_boundserror(dset, idxs)
+    read(dset)
+end
+
+function _getcontent_impl(dset::HDF5.HDF5Dataset, idxs::NTuple{N,Any}, axs::NTuple{N}) where {N}
+    canonical_idxs = Base.to_indices(dset, axs, idxs)
+    isinbounds = Base.checkbounds_indices(Bool, axs, idxs)
+    isinbounds || Base.throw_boundserror(dset, idxs)
+    dset[canonical_idxs...]
+end
+
+function getcontent(dset::HDF5.HDF5Dataset, idxs::Tuple = axes(dset))
+    _getcontent_impl(dset, idxs, axes(dset))
+end
+
 
 function LegendDataTypes.readdata(input::Union{HDF5.HDF5Dataset, HDF5.DataFile}, name::AbstractString)
     datatype = getdatatype(input[name])
@@ -275,7 +295,7 @@ function LegendDataTypes.readdata(
     ::Type{<:Union{RealQuantity,AbstractArray}}
 )
     dset = input[name]
-    data = read(dset)#::AT
+    data = getcontent(dset)#::AT
     units = getunits(dset)
     if units == NoUnits
         data
@@ -308,7 +328,7 @@ function LegendDataTypes.readdata(
     dset = input[name]
     units = getunits(dset)
     units == NoUnits || throw(ErrorExceptions("Can't interpret dataset with units as Bool values"))
-    data = read(dset)
+    data = getcontent(dset)
     # Broadcast will return BitArray, map would return Array{UInt8}:
     (x -> x > 0).(data)
 end
