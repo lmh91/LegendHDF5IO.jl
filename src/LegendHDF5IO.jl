@@ -29,7 +29,7 @@ using RadiationDetectorSignals: RealQuantity, ArrayOfDims, AosAOfDims, SArrayOfD
 include("generic_io.jl")
 include("radsig_io.jl")
 include("geant4_hdf5.jl")
-include("hists_io.jl")
+include("histogram_io.jl")
 
 
 const _datatype_dict = Dict{String,Type}()
