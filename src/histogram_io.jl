@@ -30,10 +30,16 @@ _range_to_nt(r::LinRange) = (
 _nt_to_range(nt::NamedTuple{(:start, :stop, :length)}) =
     LinRange(nt.start, nt.stop, nt.length)
 
+_edge_to_nt(edge::AbstractRange) = _range_to_nt(edge)
+_edge_to_nt(edge::AbstractVector) = collect(edge)
+_edge_to_nt(edge::Vector{<:Real}) = edge
+
+_nt_to_edge(nt::NamedTuple) = _nt_to_range(nt)
+_nt_to_edge(nt::AbstractVector) = nt
 
 function _nt_to_histogram(nt::NamedTuple)
     return StatsBase.Histogram(
-        tuple(map(b ->_nt_to_range(b.binedges), nt.binning)...), 
+        tuple(map(b ->_nt_to_edge(b.binedges), nt.binning)...), 
         nt.weights, 
         nt.binning[1].closedleft ? :left : :right, 
         nt.isdensity
@@ -44,7 +50,7 @@ function _histogram_to_nt(h::StatsBase.Histogram)
     n::Int = ndims(h.weights)
     axs_sym = Symbol.(["axis_$(i)" for i in Base.OneTo(n)])
     axs = [(
-        binedges = _range_to_nt(h.edges[i]),
+        binedges = _edge_to_nt(h.edges[i]),
         closedleft = h.closed == :left 
     ) for i in Base.OneTo(n)]
     return (
