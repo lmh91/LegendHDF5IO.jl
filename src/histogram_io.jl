@@ -1,34 +1,34 @@
 _range_to_nt(r::AbstractRange) = (
-    start = first(r),
-    stop = last(r),
+    first = first(r),
+    last = last(r),
     step = step(r),
     length = length(r)
 )
 _nt_to_range(nt::NamedTuple) =
-    range(nt.start, nt.stop, length = nt.length)
+    range(nt.first, nt.last, length = nt.length)
     
 _range_to_nt(r::UnitRange) = (
-    start = first(r),
-    stop = last(r)
+    first = first(r),
+    last = last(r)
 )
-_nt_to_range(nt::NamedTuple{(:start, :stop)}) =
-    UnitRange(nt.start, nt.stop)
+_nt_to_range(nt::NamedTuple{(:first, :last)}) =
+    UnitRange(nt.first, nt.last)
 
 _range_to_nt(r::StepRange) = (
-    start = first(r),
+    first = first(r),
     step = step(r),
-    stop = last(r)
+    last = last(r)
 )
-_nt_to_range(nt::NamedTuple{(:start, :step, :stop)}) =
-    StepRange(nt.start, nt.step, nt.stop)
+_nt_to_range(nt::NamedTuple{(:first, :step, :last)}) =
+    StepRange(nt.first, nt.step, nt.last)
 
 _range_to_nt(r::LinRange) = (
-    start = first(r),
-    stop = last(r),
+    first = first(r),
+    last = last(r),
     length = length(r)
 )
-_nt_to_range(nt::NamedTuple{(:start, :stop, :length)}) =
-    LinRange(nt.start, nt.stop, nt.length)
+_nt_to_range(nt::NamedTuple{(:first, :last, :length)}) =
+    LinRange(nt.first, nt.last, nt.length)
 
 _edge_to_nt(edge::AbstractRange) = _range_to_nt(edge)
 _edge_to_nt(edge::AbstractVector) = collect(edge)
