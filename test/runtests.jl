@@ -1,8 +1,8 @@
 # This file is a part of LegendHDF5IO.jl, licensed under the MIT License (MIT).
 
-import Test
+using Test
+
 Test.@testset "Package LegendHDF5IO" begin
-
-# test code goes here
-
+    include("ranges/range_to_namedtuple.jl")
+    include("histograms/histogram_io.jl")
 end # testset

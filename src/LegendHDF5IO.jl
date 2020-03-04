@@ -10,6 +10,7 @@ using EncodedArrays
 using LegendDataTypes
 using RadiationDetectorSignals
 using StaticArrays
+using StatsBase
 using StructArrays
 using Tables
 using Unitful
@@ -28,6 +29,7 @@ using RadiationDetectorSignals: RealQuantity, ArrayOfDims, AosAOfDims, SArrayOfD
 include("generic_io.jl")
 include("radsig_io.jl")
 include("geant4_hdf5.jl")
+include("histogram_io.jl")
 
 
 const _datatype_dict = Dict{String,Type}()
