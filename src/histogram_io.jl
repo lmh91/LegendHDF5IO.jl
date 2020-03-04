@@ -1,11 +1,10 @@
 _range_to_nt(r::AbstractRange) = (
     first = first(r),
     last = last(r),
-    step = step(r),
-    length = length(r)
+    step = step(r)
 )
 _nt_to_range(nt::NamedTuple) =
-    range(nt.first, nt.last, length = nt.length)
+    range(nt.first, nt.last, step = nt.step)
     
 _range_to_nt(r::UnitRange) = (
     first = first(r),
@@ -13,14 +12,6 @@ _range_to_nt(r::UnitRange) = (
 )
 _nt_to_range(nt::NamedTuple{(:first, :last)}) =
     UnitRange(nt.first, nt.last)
-
-_range_to_nt(r::StepRange) = (
-    first = first(r),
-    step = step(r),
-    last = last(r)
-)
-_nt_to_range(nt::NamedTuple{(:first, :step, :last)}) =
-    StepRange(nt.first, nt.step, nt.last)
 
 _range_to_nt(r::LinRange) = (
     first = first(r),
