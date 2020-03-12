@@ -38,21 +38,19 @@ function _nt_to_histogram(nt::NamedTuple)
 end
     
 function _histogram_to_nt(h::StatsBase.Histogram)
-    n::Int = ndims(h.weights)
-    axs_sym = Symbol.(["axis_$(i)" for i in Base.OneTo(n)])
+    axs_idxs = eachindex(h.edges)
+    axs_sym = Symbol.(["axis_$(i)" for i in axs_idxs])
     axs = [(
         binedges = _edge_to_nt(h.edges[i]),
         closedleft = h.closed == :left 
-    ) for i in Base.OneTo(n)]
+    ) for i in axs_idxs]
     return (
-        ndims = n,
         binning = NamedTuple{tuple(axs_sym...)}(axs),
         weights = h.weights,
-        isdensity = h.isdensity,
-        closed = h.closed    
+        isdensity = h.isdensity
     )
 end
-        
+
 
 function LegendDataTypes.writedata(
     output::HDF5.DataFile, name::AbstractString,
