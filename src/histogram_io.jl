@@ -66,6 +66,6 @@ function LegendDataTypes.readdata(
     input::HDF5.DataFile, name::AbstractString,
     AT::Type{<:Histogram}
 )
-    _nt_to_histogram(readdata(input, name))
+    nt = readdata(input, name, NamedTuple{(:binning,:weights,:isdensity)})
+    _nt_to_histogram(nt)
 end
-
