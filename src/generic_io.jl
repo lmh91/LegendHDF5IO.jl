@@ -596,3 +596,13 @@ function LegendDataTypes.readdata(
     # Hack:
     TypedTables.Table(readdata(input, name, NamedTuple{AT.var.ub.body.parameters[1]}))
 end
+
+function LegendDataTypes.readdata(
+    input::AbstractString, name::AbstractString,
+    args...; kwargs...
+)
+    @assert HDF5.ishdf5(input) "$(input) is not a valid HDF5 file."
+    HDF5.h5open(input, "r") do h5f 
+        readdata(h5f, name, args...; kwargs...)
+    end
+end
