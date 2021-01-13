@@ -53,7 +53,7 @@ end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::Histogram,
     fulldatatype::DataType = typeof(x)
 ) where {T}
@@ -63,7 +63,7 @@ end
 
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     AT::Type{<:Histogram}
 )
     nt = readdata(input, name, NamedTuple{(:binning,:weights,:isdensity)})

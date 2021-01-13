@@ -2,15 +2,15 @@
 
 export Geant4HDF5Input
 struct Geant4HDF5Input <: AbstractLegendInput
-    hdf5file::HDF5.HDF5File
+    hdf5file::HDF5.File
 end
 
 struct GEARS_HDF5Input <: AbstractLegendInput
-hdf5file::HDF5.HDF5File
+hdf5file::HDF5.File
 end
 
 struct G4SIMPLE_HDF5Input <: AbstractLegendInput
-hdf5file::HDF5.HDF5File
+hdf5file::HDF5.File
 end
 
 Base.open(filename::AbstractString, ::Type{Geant4HDF5Input}) =
@@ -23,13 +23,13 @@ function Base.getindex(input::Geant4HDF5Input, ::Colon)
 end
 
 function _d_open_if_exists(g, d_name::String)
-    HDF5.exists(g, d_name) ? HDF5.d_open(g, d_name) : error("data set \"$d_name\" does not exist")
+    haskey(g, d_name) ? HDF5.d_open(g, d_name) : error("data set \"$d_name\" does not exist")
 end
 
 function Base.read(input::Geant4HDF5Input)
-    if HDF5.exists(input.hdf5file, "/default_ntuples/t/")
+    if haskey(input.hdf5file, "/default_ntuples/t/")
         read(GEARS_HDF5Input(input.hdf5file))
-    elseif HDF5.exists(input.hdf5file, "/default_ntuples/g4sntuple/")
+    elseif haskey(input.hdf5file, "/default_ntuples/g4sntuple/")
         read(G4SIMPLE_HDF5Input(input.hdf5file))
     end
 end

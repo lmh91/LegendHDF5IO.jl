@@ -118,7 +118,7 @@ datatype_to_string(::Type{<:TypedTables.Table{<:NamedTuple{K}}}) where K = "tabl
 
 
 
-function _eltype(dset::HDF5.HDF5Dataset)
+function _eltype(dset::HDF5.Dataset)
     dtype = HDF5.datatype(dset)
     try
         HDF5.hdf5_to_julia_eltype(dtype)
@@ -148,25 +148,25 @@ end
 
 
 function hasattribute(
-    obj::Union{HDF5.HDF5Dataset, HDF5.HDF5.DataFile}, key::Symbol
+    obj::Union{HDF5.Dataset, HDF5.H5DataStore}, key::Symbol
 ) where {T<:Union{AbstractString,Real}}
     key_str = String(key)
-    attributes = HDF5.attrs(obj)
-    HDF5.exists(attributes, key_str)
+    attributes = HDF5.attributes(obj)
+    haskey(attributes, key_str)
 end
 
 
 function getattribute(
-    obj::Union{HDF5.HDF5Dataset, HDF5.HDF5.DataFile}, key::Symbol, ::Type{T}
+    obj::Union{HDF5.Dataset, HDF5.H5DataStore}, key::Symbol, ::Type{T}
 ) where {T<:Union{AbstractString,Real}}
     key_str = String(key)
-    attributes = HDF5.attrs(obj)
+    attributes = HDF5.attributes(obj)
     x = read(attributes[key_str])
     x isa T ? x : convert(T, x)
 end
 
 function getattribute(
-    obj::Union{HDF5.HDF5Dataset, HDF5.HDF5.DataFile}, key::Symbol, default_value::T
+    obj::Union{HDF5.Dataset, HDF5.H5DataStore}, key::Symbol, default_value::T
 ) where {T<:Union{AbstractString,Real}}
     if hasattribute(obj, key)
         getattribute(obj, key, T)
@@ -177,54 +177,54 @@ end
 
 
 function setattribute!(
-    obj::Union{HDF5.HDF5Dataset, HDF5.HDF5Group}, key::Symbol,
+    obj::Union{HDF5.Dataset, HDF5.Group}, key::Symbol,
     value::Real
 )
-    HDF5.attrs(obj)[String(key)] = value
+    HDF5.attributes(obj)[String(key)] = value
     nothing
 end
 
 
 function setattribute!(
-    obj::Union{HDF5.HDF5Dataset, HDF5.HDF5Group}, key::Symbol,
+    obj::Union{HDF5.Dataset, HDF5.Group}, key::Symbol,
     value::AbstractString
 )
     # Write variable-length string for h5py compatibility (see https://github.com/h5py/h5py/issues/585).
     s_arr = Array{String,0}(undef)
     s_arr[] = convert(String, value)
-    HDF5.attrs(obj)[String(key)] = s_arr
+    HDF5.attributes(obj)[String(key)] = s_arr
     nothing
 end
 
 
-LegendDataTypes.getunits(dset::HDF5.HDF5Dataset) = units_from_string(getattribute(dset, :units, ""))
+LegendDataTypes.getunits(dset::HDF5.Dataset) = units_from_string(getattribute(dset, :units, ""))
 
-function LegendDataTypes.setunits!(dset::HDF5.HDF5Dataset, units::Unitful.Unitlike)
+function LegendDataTypes.setunits!(dset::HDF5.Dataset, units::Unitful.Unitlike)
     ustr = units_to_string(units)
     # @debug "setunits!($(_infostring(dset)), \"$ustr\")"
     setattribute!(dset, :units, ustr)
 end
 
 
-default_datatype(dset::HDF5.HDF5Dataset) = AbstractArray{<:RealQuantity,length(size(dset))}
-default_datatype(df::HDF5.DataFile) = NamedTuple{(Symbol.(names(df))...,)}
+default_datatype(dset::HDF5.Dataset) = AbstractArray{<:RealQuantity,length(size(dset))}
+default_datatype(df::HDF5.H5DataStore) = NamedTuple{(Symbol.(names(df))...,)}
 
-_size(dset::HDF5.HDF5Dataset) = size(dset)
-_size(df::HDF5.DataFile) = ()
+_size(dset::HDF5.Dataset) = size(dset)
+_size(df::HDF5.H5DataStore) = ()
 
-# HDF5.DataFile
-# HDF5.HDF5Dataset
-_infostring(x::HDF5.HDF5Group) = "group \"$(HDF5.name(x))\""
-_infostring(x::HDF5.HDF5Dataset) = "dataset \"$(HDF5.name(x))\" with size $(size(x)) of $(eltype(x))"
+# HDF5.H5DataStore
+# HDF5.Dataset
+_infostring(x::HDF5.Group) = "group \"$(HDF5.name(x))\""
+_infostring(x::HDF5.Dataset) = "dataset \"$(HDF5.name(x))\" with size $(size(x)) of $(eltype(x))"
 
-function getdatatype(input::Union{HDF5.HDF5Dataset, HDF5.DataFile})
+function getdatatype(input::Union{HDF5.Dataset, HDF5.H5DataStore})
     dtstr = getattribute(input, :datatype, "")
     dt = isempty(dtstr) ? default_datatype(input) : datatype_from_string(dtstr)
     # @debug "getdatatype($(_infostring(input))) = $dt"
     dt
 end
 
-function setdatatype!(output::Union{HDF5.HDF5Dataset, HDF5.DataFile}, datatype::Type)
+function setdatatype!(output::Union{HDF5.Dataset, HDF5.H5DataStore}, datatype::Type)
     dtstr = datatype_to_string(datatype)
     # @debug "setdatatype!($(_infostring(output)), \"$dtstr\")"
     setattribute!(output, :datatype, dtstr)
@@ -232,7 +232,7 @@ end
 
 
 
-function getinfo(dset::HDF5.HDF5Dataset)
+function getinfo(dset::HDF5.Dataset)
     (
         datatype = getattribute(dset, :datatype, ""),
         units = getunits(dset),
@@ -241,35 +241,35 @@ function getinfo(dset::HDF5.HDF5Dataset)
 end
 
 
-function _getcontent_impl(dset::HDF5.HDF5Dataset, idxs::NTuple{N,Colon}, axs::NTuple{N}) where {N}
+function _getcontent_impl(dset::HDF5.Dataset, idxs::NTuple{N,Colon}, axs::NTuple{N}) where {N}
     read(dset)
 end
 
-function _getcontent_impl(dset::HDF5.HDF5Dataset, idxs::Tuple{Integer}, axs::NTuple{0}) where {N}
+function _getcontent_impl(dset::HDF5.Dataset, idxs::Tuple{Integer}, axs::NTuple{0}) where {N}
     idxs == (1,) || Base.throw_boundserror(dset, idxs)
     read(dset)
 end
 
-function _getcontent_impl(dset::HDF5.HDF5Dataset, idxs::NTuple{N,Any}, axs::NTuple{N}) where {N}
+function _getcontent_impl(dset::HDF5.Dataset, idxs::NTuple{N,Any}, axs::NTuple{N}) where {N}
     canonical_idxs = Base.to_indices(dset, axs, idxs)
     isinbounds = Base.checkbounds_indices(Bool, axs, idxs)
     isinbounds || Base.throw_boundserror(dset, idxs)
     dset[canonical_idxs...]
 end
 
-function getcontent(dset::HDF5.HDF5Dataset, idxs::Tuple = axes(dset))
+function getcontent(dset::HDF5.Dataset, idxs::Tuple = axes(dset))
     _getcontent_impl(dset, idxs, axes(dset))
 end
 
 
-function LegendDataTypes.readdata(input::Union{HDF5.HDF5Dataset, HDF5.DataFile}, name::AbstractString)
+function LegendDataTypes.readdata(input::Union{HDF5.Dataset, HDF5.H5DataStore}, name::AbstractString)
     datatype = getdatatype(input[name])
     readdata(input, name, datatype)
 end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::Union{T,AbstractArray{T}},
     fulldatatype::DataType = typeof(x)
 ) where {T<:RealQuantity}
@@ -291,7 +291,7 @@ function LegendDataTypes.writedata(
 end
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     ::Type{<:Union{RealQuantity,AbstractArray}}
 )
     dset = input[name]
@@ -309,7 +309,7 @@ end
 # https://github.com/h5py/h5py/issues/641). Issue may be fixed in recent
 # versions of h5py (see https://github.com/h5py/h5py/pull/821).
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::Union{Bool,AbstractArray{Bool}},
     fulldatatype::DataType = typeof(x)
 )
@@ -322,7 +322,7 @@ function LegendDataTypes.writedata(
 end
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     ::Type{<:Union{Bool,AbstractArray{<:Bool}}}
 )
     dset = input[name]
@@ -335,7 +335,7 @@ end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::AbstractArray{<:Enum{T}},
     fulldatatype::DataType = typeof(x)
 ) where {T}
@@ -343,7 +343,7 @@ function LegendDataTypes.writedata(
 end
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     AT::Type{<:AbstractArray{<:Enum}}
 )
     ET = AT.body.parameters[1].ub
@@ -373,7 +373,7 @@ end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::AbstractArray{T,N},
     fulldatatype::DataType = typeof(x)
 ) where {L,T<:NTuple{L,RealQuantity},N}
@@ -381,7 +381,7 @@ function LegendDataTypes.writedata(
 end
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     AT::Type{<:AbstractArray{<:NTuple}}
 )
     N = length(size(input[name])) - 1
@@ -397,7 +397,7 @@ end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::AbstractArray{T,N},
     fulldatatype::DataType = typeof(x)
 ) where {TPL,T<:StaticArray{TPL,<:RealQuantity},N}
@@ -405,7 +405,7 @@ function LegendDataTypes.writedata(
 end
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     AT::Type{<:AbstractArray{<:StaticVector}}
 )
     N = length(size(input[name])) - 1
@@ -421,7 +421,7 @@ end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::AbstractString,
     fulldatatype::DataType = typeof(x)
 )
@@ -433,7 +433,7 @@ function LegendDataTypes.writedata(
 end
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     ::Type{<:String}
 )
     dset = input[name]
@@ -442,7 +442,7 @@ end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::Symbol,
     fulldatatype::DataType = typeof(x)
 )
@@ -450,7 +450,7 @@ function LegendDataTypes.writedata(
 end
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     ::Type{<:Symbol}
 )
     Symbol(readdata(input, name, String))
@@ -458,7 +458,7 @@ end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::AbstractArray{<:AbstractArray{T,M},N},
     fulldatatype::DataType = typeof(x)
 ) where {T,M,N}
@@ -472,7 +472,7 @@ function LegendDataTypes.writedata(
 end
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     AT::Type{<:AbstractArray{<:AbstractArray}}
 )
     data = readdata(input, "$name/flattened_data")
@@ -483,7 +483,7 @@ end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::VectorOfEncodedArrays{T,1,C},
     fulldatatype::DataType = typeof(x)
 ) where {T,N,C}
@@ -506,7 +506,7 @@ function LegendDataTypes.writedata(
 end
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     AT::Type{<:VectorOfEncodedArrays}
 )
     data_vec = readdata(input, "$name/encoded_data")
@@ -539,7 +539,7 @@ end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::AbstractArrayOfSimilarArrays{T,M,N},
     fulldatatype::DataType = typeof(x)
 ) where {T,M,N}
@@ -549,7 +549,7 @@ end
 
 # Hack:
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     AT::Type{<:AbstractVectorOfSimilarVectors}
 )
     nestedview(readdata(input, name, AbstractArray{<:RealQuantity}))
@@ -557,7 +557,7 @@ end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::NamedTuple,
     fulldatatype::DataType = typeof(x)
 )
@@ -570,7 +570,7 @@ function LegendDataTypes.writedata(
 end
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     AT::Type{<:NamedTuple}
 )
     syms = AT.body.parameters[1]
@@ -579,7 +579,7 @@ end
 
 
 function LegendDataTypes.writedata(
-    output::HDF5.DataFile, name::AbstractString,
+    output::HDF5.H5DataStore, name::AbstractString,
     x::Any,
     fulldatatype::DataType = typeof(x)
 )
@@ -590,7 +590,7 @@ function LegendDataTypes.writedata(
 end
 
 function LegendDataTypes.readdata(
-    input::HDF5.DataFile, name::AbstractString,
+    input::HDF5.H5DataStore, name::AbstractString,
     AT::Type{<:TypedTables.Table}
 )
     # Hack:
