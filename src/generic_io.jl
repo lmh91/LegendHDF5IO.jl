@@ -251,7 +251,12 @@ function _getcontent_impl(dset::HDF5.Dataset, idxs::Tuple{Integer}, axs::NTuple{
 end
 
 function _getcontent_impl(dset::HDF5.Dataset, idxs::NTuple{N,Any}, axs::NTuple{N}) where {N}
-    canonical_idxs = Base.to_indices(dset, axs, idxs)
+    # HDF5.generic_read doesn't like empty indices like `(Base.OneTo(0),)`:
+    canonical_idxs = if idxs == axs && all(isempty, idxs)
+        ()
+    else
+        Base.to_indices(dset, axs, idxs)
+    end
     isinbounds = Base.checkbounds_indices(Bool, axs, idxs)
     isinbounds || Base.throw_boundserror(dset, idxs)
     dset[canonical_idxs...]
